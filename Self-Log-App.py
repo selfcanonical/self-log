@@ -384,7 +384,7 @@ def parse_timestamp(timestamp_str, log_format):
         return None
 
 @st.cache_data
-def process_log_file(file_content, log_format, progress_bar=None):
+def process_log_file(file_content, log_format, _progress_bar=None):
     """Process uploaded log file and return DataFrame"""
     try:
         lines = file_content.decode('utf-8').splitlines()
@@ -399,8 +399,8 @@ def process_log_file(file_content, log_format, progress_bar=None):
     failed_lines = 0
     
     for i, line in enumerate(lines):
-        if progress_bar and i % 1000 == 0:
-            progress_bar.progress(i / total_lines)
+        if _progress_bar and i % 1000 == 0:  # Changed from progress_bar to _progress_bar
+            _progress_bar.progress(i / total_lines)
         
         if line.strip():
             parsed = parse_log_line(line, log_format)
@@ -409,8 +409,8 @@ def process_log_file(file_content, log_format, progress_bar=None):
             else:
                 failed_lines += 1
     
-    if progress_bar:
-        progress_bar.progress(1.0)
+    if _progress_bar:  # Changed from progress_bar to _progress_bar
+        _progress_bar.progress(1.0)
     
     if not parsed_data:
         return None, failed_lines
