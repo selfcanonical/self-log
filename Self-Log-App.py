@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -13,7 +12,7 @@ import numpy as np
 
 # Page configuration
 st.set_page_config(
-    page_title="Advanced Log File Analysis Dashboard",
+    page_title="Self Log - Server Log File Analysis Dashboard",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
