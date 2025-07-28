@@ -277,11 +277,10 @@ LLM_AI_CATEGORIES = [
 
 # Updated LOG_PATTERNS with more flexible regex
 LOG_PATTERNS = {
-    'Apache Common': r'^(\S+)\s+\S+\s+\S+\s+$([^$]+)$\s+"([^"]*?)"\s+(\d{3}|-)\s+(\d+|-)\s*(?:"([^"]*?)"\s+"([^"]*?)")?',
-    'Apache Combined': r'^(\S+)\s+\S+\s+\S+\s+$([^$]+)$\s+"([^"]*?)"\s+(\d{3}|-)\s+(\d+|-)\s+"([^"]*?)"\s+"([^"]*?)"',
-    'Nginx': r'^(\S+)\s+-\s+\S+\s+$([^$]+)$\s+"([^"]*?)"\s+(\d{3}|-)\s+(\d+|-)\s+"([^"]*?)"\s+"([^"]*?)"',
-    'IIS': r'^(\S+)\s+\S+\s+\S+\s+(\S+\s+\S+)\s+(\S+)\s+(\d{3})\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+"([^"]*?)"',
-    'Custom': r'^(\S+).*?"([^"]*)"[^"]*"([^"]*)"$'  # Fallback pattern
+    'Apache Combined': r'^(?P<ip>\S+) \S+ \S+ $(?P<timestamp>[^$]+)$ "(?P<request>[^"]*)" (?P<status>\d{3}) (?P<size>\d+|-) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"$',
+    'Apache Common':   r'^(?P<ip>\S+) \S+ \S+ $(?P<timestamp>[^$]+)$ "(?P<request>[^"]*)" (?P<status>\d{3}) (?P<size>\d+|-)$',
+    'Nginx':           r'^(?P<ip>\S+) - \S+ $(?P<timestamp>[^$]+)$ "(?P<request>[^"]*)" (?P<status>\d{3}) (?P<size>\d+|-) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"$',
+    'IIS':             r'^(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) (?P<s_ip>\S+) (?P<cs_method>\S+) (?P<cs_uri_stem>\S+) (?P<cs_uri_query>\S+) (?P<s_port>\d+) (?P<cs_username>\S+) (?P<c_ip>\S+) (?P<user_agent>.*?) (?P<referer>.*?) (?P<status>\d{3}) (?P<substatus>\d+) (?P<win32status>\d+) (?P<time_taken>\d+)',
 }
 
 @st.cache_data
@@ -328,48 +327,69 @@ def categorize_crawler_type(crawler_type):
         return 'Unknown'
 
 def parse_log_line(line, log_format):
-    """Enhanced log line parsing with better error handling"""
     pattern = LOG_PATTERNS.get(log_format)
     if not pattern:
         return None
-    
     match = re.match(pattern, line.strip())
     if not match:
         return None
     
-    groups = match.groups()
+    d = match.groupdict()
     
-    try:
-        if log_format in ['Apache Common', 'Apache Combined', 'Nginx']:
-            # More flexible parsing
-            return {
-                'ip': groups[0] if groups[0] else '',
-                'timestamp': groups[1] if len(groups) > 1 and groups[1] else '',
-                'method': extract_method_from_request(groups[2]) if len(groups) > 2 else '',
-                'url': extract_url_from_request(groups[2]) if len(groups) > 2 else '',
-                'protocol': extract_protocol_from_request(groups[2]) if len(groups) > 2 else '',
-                'status': groups[3] if len(groups) > 3 and groups[3] else '',
-                'size': groups[4] if len(groups) > 4 and groups[4] else '',
-                'referer': groups[5] if len(groups) > 5 and groups[5] else '',
-                'user_agent': groups[6] if len(groups) > 6 and groups[6] else ''
-            }
-        elif log_format == 'Custom':
-            # Simple fallback
-            return {
-                'ip': groups[0] if groups[0] else '',
-                'timestamp': '',
-                'method': '',
-                'url': '',
-                'protocol': '',
-                'status': '',
-                'size': '',
-                'referer': groups[1] if len(groups) > 1 and groups[1] else '',
-                'user_agent': groups[2] if len(groups) > 2 and groups[2] else ''
-            }
-    except Exception as e:
-        return None
-    
-    return None
+    # Apache Combined, Any with 'request'
+    if "request" in d:
+        method, url, protocol = "", "", ""
+        if d['request']:
+            parts = d['request'].split()
+            if len(parts) == 3:
+                method, url, protocol = parts
+            elif len(parts) == 2:
+                method, url = parts
+        return {
+            "ip": d.get("ip", ""),
+            "timestamp": d.get("timestamp", ""),
+            "method": method,
+            "url": url,
+            "protocol": protocol,
+            "status": d.get("status", ""),
+            "size": d.get("size", ""),
+            "referer": d.get("referer", ""),
+            "user_agent": d.get("user_agent", "")
+        }
+    # Nginx (same as above due to field names)
+    elif log_format == 'Nginx':
+        method, url, protocol = "", "", ""
+        if d['request']:
+            parts = d['request'].split()
+            if len(parts) == 3:
+                method, url, protocol = parts
+            elif len(parts) == 2:
+                method, url = parts
+        return {
+            "ip": d.get("ip", ""),
+            "timestamp": d.get("timestamp", ""),
+            "method": method,
+            "url": url,
+            "protocol": protocol,
+            "status": d.get("status", ""),
+            "size": d.get("size", ""),
+            "referer": d.get("referer", ""),
+            "user_agent": d.get("user_agent", "")
+        }
+    # IIS
+    elif log_format == 'IIS':
+        return {
+            "ip": d.get("c_ip", ""),
+            "timestamp": f"{d.get('date', '')} {d.get('time', '')}",
+            "method": d.get('cs_method', ''),
+            "url": d.get('cs_uri_stem', ''),
+            "protocol": "",
+            "status": d.get('status', ''),
+            "size": "",
+            "referer": d.get('referer', ''),
+            "user_agent": d.get('user_agent', '')
+        }
+    return None  # fallback
 
 def extract_method_from_request(request_string):
     """Extract HTTP method from request string"""
