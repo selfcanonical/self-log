@@ -275,12 +275,13 @@ LLM_AI_CATEGORIES = [
     'Stability AI', 'You.com', 'Neeva', 'Kagi', 'Brave AI', 'DuckDuckGo AI', 'Other AI Bots'
 ]
 
-# Log format regex patterns
+# Updated LOG_PATTERNS with more flexible regex
 LOG_PATTERNS = {
-    'Apache Common': r'^(\S+) \S+ \S+ $([^]]+)$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-)(?: \"([^\"]*)\" \"([^\"]*)\")?',
-    'Apache Combined': r'^(\S+) \S+ \S+ $([^]]+)$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-) \"([^\"]*)\" \"([^\"]*)\"',
-    'Nginx': r'^(\S+) - \S+ $([^]]+)$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-) \"([^\"]*)\" \"([^\"]*)\"',
-    'IIS': r'^(\S+) \S+ \S+ (\S+ \S+) (\S+) (\d{3}) (\d+) (\d+) (\d+) (\d+) \"([^\"]*)\"'
+    'Apache Common': r'^(\S+)\s+\S+\s+\S+\s+$([^$]+)$\s+"([^"]*?)"\s+(\d{3}|-)\s+(\d+|-)\s*(?:"([^"]*?)"\s+"([^"]*?)")?',
+    'Apache Combined': r'^(\S+)\s+\S+\s+\S+\s+$([^$]+)$\s+"([^"]*?)"\s+(\d{3}|-)\s+(\d+|-)\s+"([^"]*?)"\s+"([^"]*?)"',
+    'Nginx': r'^(\S+)\s+-\s+\S+\s+$([^$]+)$\s+"([^"]*?)"\s+(\d{3}|-)\s+(\d+|-)\s+"([^"]*?)"\s+"([^"]*?)"',
+    'IIS': r'^(\S+)\s+\S+\s+\S+\s+(\S+\s+\S+)\s+(\S+)\s+(\d{3})\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+"([^"]*?)"',
+    'Custom': r'^(\S+).*?"([^"]*)"[^"]*"([^"]*)"$'  # Fallback pattern
 }
 
 @st.cache_data
@@ -326,9 +327,8 @@ def categorize_crawler_type(crawler_type):
     else:
         return 'Unknown'
 
-@st.cache_data
 def parse_log_line(line, log_format):
-    """Parse a single log line based on the specified format"""
+    """Enhanced log line parsing with better error handling"""
     pattern = LOG_PATTERNS.get(log_format)
     if not pattern:
         return None
@@ -341,33 +341,72 @@ def parse_log_line(line, log_format):
     
     try:
         if log_format in ['Apache Common', 'Apache Combined', 'Nginx']:
+            # More flexible parsing
             return {
                 'ip': groups[0] if groups[0] else '',
-                'timestamp': groups[1] if groups[1] else '',
-                'method': groups[2] if groups[2] else '',
-                'url': groups[3] if len(groups) > 3 and groups[3] else '',
-                'protocol': groups[4] if len(groups) > 4 and groups[4] else '',
-                'status': groups[5] if len(groups) > 5 and groups[5] else '',
-                'size': groups[6] if len(groups) > 6 and groups[6] else '',
-                'referer': groups[7] if len(groups) > 7 and groups[7] else '',
-                'user_agent': groups[8] if len(groups) > 8 and groups[8] else ''
-            }
-        elif log_format == 'IIS':
-            return {
-                'ip': groups[0] if groups[0] else '',
-                'timestamp': groups[1] if groups[1] else '',
-                'method': groups[2] if groups[2] else '',
-                'url': '',
-                'protocol': '',
+                'timestamp': groups[1] if len(groups) > 1 and groups[1] else '',
+                'method': extract_method_from_request(groups[2]) if len(groups) > 2 else '',
+                'url': extract_url_from_request(groups[2]) if len(groups) > 2 else '',
+                'protocol': extract_protocol_from_request(groups[2]) if len(groups) > 2 else '',
                 'status': groups[3] if len(groups) > 3 and groups[3] else '',
                 'size': groups[4] if len(groups) > 4 and groups[4] else '',
-                'referer': '',
-                'user_agent': groups[9] if len(groups) > 9 and groups[9] else ''
+                'referer': groups[5] if len(groups) > 5 and groups[5] else '',
+                'user_agent': groups[6] if len(groups) > 6 and groups[6] else ''
             }
-    except Exception:
+        elif log_format == 'Custom':
+            # Simple fallback
+            return {
+                'ip': groups[0] if groups[0] else '',
+                'timestamp': '',
+                'method': '',
+                'url': '',
+                'protocol': '',
+                'status': '',
+                'size': '',
+                'referer': groups[1] if len(groups) > 1 and groups[1] else '',
+                'user_agent': groups[2] if len(groups) > 2 and groups[2] else ''
+            }
+    except Exception as e:
         return None
     
     return None
+
+def extract_method_from_request(request_string):
+    """Extract HTTP method from request string"""
+    if not request_string:
+        return ''
+    parts = request_string.split()
+    return parts[0] if parts else ''
+
+def extract_url_from_request(request_string):
+    """Extract URL from request string"""
+    if not request_string:
+        return ''
+    parts = request_string.split()
+    return parts[1] if len(parts) > 1 else ''
+
+def extract_protocol_from_request(request_string):
+    """Extract protocol from request string"""
+    if not request_string:
+        return ''
+    parts = request_string.split()
+    return parts[2] if len(parts) > 2 else ''
+
+def debug_log_parsing(line, log_format):
+    """Debug function to show parsing attempts"""
+    st.write(f"**Trying format:** {log_format}")
+    st.write(f"**Sample line:** `{line[:200]}...`" if len(line) > 200 else f"**Sample line:** `{line}`")
+    
+    pattern = LOG_PATTERNS.get(log_format)
+    if pattern:
+        match = re.match(pattern, line.strip())
+        if match:
+            st.success(f"✅ **Pattern matched!** Groups found: {len(match.groups())}")
+            return True
+        else:
+            st.error(f"❌ **Pattern didn't match**")
+            return False
+    return False
 
 @st.cache_data
 def parse_timestamp(timestamp_str, log_format):
@@ -385,7 +424,7 @@ def parse_timestamp(timestamp_str, log_format):
 
 @st.cache_data
 def process_log_file(file_content, log_format, _progress_bar=None):
-    """Process uploaded log file and return DataFrame"""
+    """Process uploaded log file with debugging"""
     try:
         lines = file_content.decode('utf-8').splitlines()
     except UnicodeDecodeError:
@@ -394,12 +433,26 @@ def process_log_file(file_content, log_format, _progress_bar=None):
         except Exception:
             return None, 0
     
+    # Debug mode - show first few lines
+    st.subheader("🔍 Debug Information")
+    st.write(f"**Total lines in file:** {len(lines)}")
+    st.write(f"**Selected format:** {log_format}")
+    
+    # Show first 3 non-empty lines for debugging
+    sample_lines = [line for line in lines[:10] if line.strip()][:3]
+    if sample_lines:
+        st.write("**First 3 sample lines:**")
+        for i, line in enumerate(sample_lines, 1):
+            with st.expander(f"Line {i} - Click to test parsing"):
+                debug_log_parsing(line, log_format)
+    
+    # Continue with normal processing
     total_lines = len(lines)
     parsed_data = []
     failed_lines = 0
     
     for i, line in enumerate(lines):
-        if _progress_bar and i % 1000 == 0:  # Changed from progress_bar to _progress_bar
+        if _progress_bar and i % 1000 == 0:
             _progress_bar.progress(i / total_lines)
         
         if line.strip():
@@ -408,13 +461,19 @@ def process_log_file(file_content, log_format, _progress_bar=None):
                 parsed_data.append(parsed)
             else:
                 failed_lines += 1
+                # Show first few failed lines for debugging
+                if failed_lines <= 3:
+                    st.warning(f"Failed to parse line {i+1}: `{line[:100]}...`")
     
-    if _progress_bar:  # Changed from progress_bar to _progress_bar
+    if _progress_bar:
         _progress_bar.progress(1.0)
+    
+    st.write(f"**Parsing results:** {len(parsed_data)} successful, {failed_lines} failed")
     
     if not parsed_data:
         return None, failed_lines
     
+    # Continue with DataFrame creation...
     df = pd.DataFrame(parsed_data)
     
     # Process timestamps
@@ -431,7 +490,7 @@ def process_log_file(file_content, log_format, _progress_bar=None):
     df['size'] = df['size'].fillna(0)
     
     return df, failed_lines
-
+    
 def create_llm_ai_highlight_chart(df):
     """Create special chart highlighting LLM/AI bot activity"""
     llm_df = df[df['crawler_category'] == 'LLM/AI Bots']
