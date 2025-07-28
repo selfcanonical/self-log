@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -12,7 +13,7 @@ import numpy as np
 
 # Page configuration
 st.set_page_config(
-    page_title="Self Log - Advanced Log File Analysis Dashboard",
+    page_title="Advanced Log File Analysis Dashboard",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -96,7 +97,7 @@ CRAWLER_PATTERNS = {
         r'Perplexity',
         r'PerplexityAI'
     ],
-    'Microsoft': [
+    'Microsoft AI': [
         r'BingAI',
         r'EdgeAI',
         r'CopilotBot',
@@ -147,7 +148,7 @@ CRAWLER_PATTERNS = {
         r'KagiBot',
         r'Kagi'
     ],
-    'Brave': [
+    'Brave AI': [
         r'BraveBot',
         r'Brave-AI',
         r'BraveAI'
@@ -169,14 +170,14 @@ CRAWLER_PATTERNS = {
     
     # Traditional Search Engine Crawlers
     'Googlebot': [
-        r'Googlebot(?!-AI)',  # Exclude AI variants
+        r'Googlebot(?!-AI)',
         r'GoogleBot(?!-AI)',
         r'Google-InspectionTool',
         r'GoogleOther',
         r'GoogleImageProxy'
     ],
     'Bingbot': [
-        r'bingbot(?!AI)',  # Exclude AI variants
+        r'bingbot(?!AI)',
         r'BingBot(?!AI)',
         r'MSNBot',
         r'msnbot'
@@ -195,13 +196,13 @@ CRAWLER_PATTERNS = {
         r'Yandex'
     ],
     'DuckDuckGo': [
-        r'DuckDuckBot(?!-AI)',  # Exclude AI variants
+        r'DuckDuckBot(?!-AI)',
         r'DuckDuckGo(?!-AI)'
     ],
     
     # Social Media Crawlers
     'Facebook': [
-        r'facebookexternalhit(?!.*AI)',  # Exclude AI variants
+        r'facebookexternalhit(?!.*AI)',
         r'FacebookBot(?!-AI)'
     ],
     'Twitter': [
@@ -252,7 +253,7 @@ CRAWLER_PATTERNS = {
     
     # Other Crawlers
     'Other Crawlers': [
-        r'bot(?!AI)',  # Generic bot but not AI
+        r'bot(?!AI)',
         r'Bot(?!AI)',
         r'spider',
         r'Spider',
@@ -270,16 +271,16 @@ CRAWLER_PATTERNS = {
 
 # LLM/AI Bot categories for special handling
 LLM_AI_CATEGORIES = [
-    'OpenAI', 'Anthropic', 'Google AI', 'Meta AI', 'Perplexity', 'Microsoft',
+    'OpenAI', 'Anthropic', 'Google AI', 'Meta AI', 'Perplexity', 'Microsoft AI',
     'Character.AI', 'Inflection', 'Cohere', 'AI21', 'Hugging Face', 'Replicate',
-    'Stability AI', 'You.com', 'Neeva', 'Kagi', 'Brave', 'DuckDuckGo AI', 'Other AI Bots'
+    'Stability AI', 'You.com', 'Neeva', 'Kagi', 'Brave AI', 'DuckDuckGo AI', 'Other AI Bots'
 ]
 
 # Log format regex patterns
 LOG_PATTERNS = {
-    'Apache Common': r'^(\S+) \S+ \S+ $([\w:/]+\s[+\-]\d{4})$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-) \"([^\"]*)\" \"([^\"]*)\"?',
-    'Apache Combined': r'^(\S+) \S+ \S+ $([\w:/]+\s[+\-]\d{4})$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-) \"([^\"]*)\" \"([^\"]*)\"',
-    'Nginx': r'^(\S+) - \S+ $([\w:/]+\s[+\-]\d{4})$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-) \"([^\"]*)\" \"([^\"]*)\"',
+    'Apache Common': r'^(\S+) \S+ \S+ $([^]]+)$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-)(?: \"([^\"]*)\" \"([^\"]*)\")?',
+    'Apache Combined': r'^(\S+) \S+ \S+ $([^]]+)$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-) \"([^\"]*)\" \"([^\"]*)\"',
+    'Nginx': r'^(\S+) - \S+ $([^]]+)$ \"(\S+)\s?(\S+)?\s?(\S+)?\" (\d{3}|-) (\d+|-) \"([^\"]*)\" \"([^\"]*)\"',
     'IIS': r'^(\S+) \S+ \S+ (\S+ \S+) (\S+) (\d{3}) (\d+) (\d+) (\d+) (\d+) \"([^\"]*)\"'
 }
 
@@ -339,30 +340,33 @@ def parse_log_line(line, log_format):
     
     groups = match.groups()
     
-    if log_format in ['Apache Common', 'Apache Combined', 'Nginx']:
-        return {
-            'ip': groups[0],
-            'timestamp': groups[1],
-            'method': groups[2],
-            'url': groups[3] if groups[3] else '',
-            'protocol': groups[4] if groups[4] else '',
-            'status': groups[5],
-            'size': groups[6],
-            'referer': groups[7] if len(groups) > 7 else '',
-            'user_agent': groups[8] if len(groups) > 8 else ''
-        }
-    elif log_format == 'IIS':
-        return {
-            'ip': groups[0],
-            'timestamp': groups[1],
-            'method': groups[2],
-            'url': '',
-            'protocol': '',
-            'status': groups[3],
-            'size': groups[4],
-            'referer': '',
-            'user_agent': groups[8] if len(groups) > 8 else ''
-        }
+    try:
+        if log_format in ['Apache Common', 'Apache Combined', 'Nginx']:
+            return {
+                'ip': groups[0] if groups[0] else '',
+                'timestamp': groups[1] if groups[1] else '',
+                'method': groups[2] if groups[2] else '',
+                'url': groups[3] if len(groups) > 3 and groups[3] else '',
+                'protocol': groups[4] if len(groups) > 4 and groups[4] else '',
+                'status': groups[5] if len(groups) > 5 and groups[5] else '',
+                'size': groups[6] if len(groups) > 6 and groups[6] else '',
+                'referer': groups[7] if len(groups) > 7 and groups[7] else '',
+                'user_agent': groups[8] if len(groups) > 8 and groups[8] else ''
+            }
+        elif log_format == 'IIS':
+            return {
+                'ip': groups[0] if groups[0] else '',
+                'timestamp': groups[1] if groups[1] else '',
+                'method': groups[2] if groups[2] else '',
+                'url': '',
+                'protocol': '',
+                'status': groups[3] if len(groups) > 3 and groups[3] else '',
+                'size': groups[4] if len(groups) > 4 and groups[4] else '',
+                'referer': '',
+                'user_agent': groups[9] if len(groups) > 9 and groups[9] else ''
+            }
+    except Exception:
+        return None
     
     return None
 
@@ -372,20 +376,26 @@ def parse_timestamp(timestamp_str, log_format):
     try:
         if log_format in ['Apache Common', 'Apache Combined', 'Nginx']:
             # Format: [10/Oct/2000:13:55:36 -0700]
-            dt_str = timestamp_str.split()[0]
+            dt_str = timestamp_str.split()[0] if ' ' in timestamp_str else timestamp_str
             return datetime.strptime(dt_str, '%d/%b/%Y:%H:%M:%S')
         elif log_format == 'IIS':
             # Format: 2000-10-10 13:55:36
             return datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-    except:
+    except Exception:
         return None
 
 @st.cache_data
 def process_log_file(file_content, log_format, progress_bar=None):
     """Process uploaded log file and return DataFrame"""
-    lines = file_content.decode('utf-8').splitlines()
-    total_lines = len(lines)
+    try:
+        lines = file_content.decode('utf-8').splitlines()
+    except UnicodeDecodeError:
+        try:
+            lines = file_content.decode('latin-1').splitlines()
+        except Exception:
+            return None, 0
     
+    total_lines = len(lines)
     parsed_data = []
     failed_lines = 0
     
@@ -431,9 +441,6 @@ def create_llm_ai_highlight_chart(df):
         return None
     
     llm_counts = llm_df['crawler_type'].value_counts()
-    
-    # Create a color palette that highlights LLM bots
-    colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd', '#98d8c8', '#f7dc6f']
     
     fig = px.bar(
         x=llm_counts.values,
@@ -793,15 +800,64 @@ def main():
                     with col2:
                         category_chart = create_category_comparison_chart(filtered_df)
                         st.plotly_chart(category_chart, use_container_width=True)
-                    
-                    # LLM/AI specific statistics
+                else:
+                    st.info("ℹ️ No LLM/AI bot activity detected in the filtered data.")
+                    category_chart = create_category_comparison_chart(filtered_df)
+                    st.plotly_chart(category_chart, use_container_width=True)
+                
+                # Main Charts Section
+                st.header("📊 Detailed Analysis")
+                
+                # Top crawlers and timeline
+                col1, col2 = st.columns(2)
+                with col1:
+                    top_crawlers_chart = create_top_crawlers_chart(filtered_df)
+                    st.plotly_chart(top_crawlers_chart, use_container_width=True)
+                
+                with col2:
+                    timeline_chart = create_timeline_chart(filtered_df)
+                    st.plotly_chart(timeline_chart, use_container_width=True)
+                
+                # Status codes and URLs
+                col1, col2 = st.columns(2)
+                with col1:
+                    status_codes_chart = create_status_codes_by_crawler_chart(filtered_df)
+                    st.plotly_chart(status_codes_chart, use_container_width=True)
+                
+                with col2:
+                    status_pie_chart = create_status_pie_chart(filtered_df)
+                    st.plotly_chart(status_pie_chart, use_container_width=True)
+                
+                # Top URLs chart (full width)
+                top_urls_chart = create_top_urls_chart(filtered_df)
+                st.plotly_chart(top_urls_chart, use_container_width=True)
+                
+                # Data Export Section
+                st.header("📥 Data Export")
+                
+                col1, col2, col3 = st.columns([1, 1, 2])
+                
+                with col1:
+                    st.markdown(get_download_link(filtered_df, "filtered_logs.csv"), unsafe_allow_html=True)
+                
+                with col2:
                     llm_df = filtered_df[filtered_df['crawler_category'] == 'LLM/AI Bots']
                     if len(llm_df) > 0:
-                        st.subheader("🔍 LLM/AI Bot Insights")
-                        col1, col2, col3, col4 = st.columns(4)
-                        
-                        with col1:
-                            most_active_llm = llm_df['crawler_type'].value_counts().index[0]
-                            st.metric("Most Active LLM Bot", most_active_llm)
-                        
+                        st.markdown(get_download_link(llm_df, "llm_ai_bots.csv"), unsafe_allow_html=True)
                 
+                with col3:
+                    st.info(f"💾 Export includes {len(filtered_df):,} filtered records")
+                
+                # Raw Data Section
+                with st.expander("🔍 View Raw Data"):
+                    st.dataframe(
+                        filtered_df[['datetime', 'ip', 'method', 'url', 'status', 'crawler_type', 'crawler_category']],
+                        use_container_width=True
+                    )
+                
+            except Exception as e:
+                st.error(f"❌ Error processing file: {str(e)}")
+                st.info("Please check your log format selection and file content.")
+
+if __name__ == "__main__":
+    main()
